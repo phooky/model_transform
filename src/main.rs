@@ -1,7 +1,7 @@
 extern crate stl_io;
 extern crate glam;
 
-use std::io::{Write,stdout};
+use std::io::{Write,Read,stdout,stdin};
 use std::fs::File;
 use glam::{Affine3A,Vec3};
 
@@ -29,11 +29,16 @@ fn real_main() -> Result<(),String> {
     let mut transforms : Vec<Affine3A> = Vec::new();
     let mut i = std::env::args().skip(1);
     let mut outpath : Option<String> = None;
+    let mut inpath : Option<String> = None;
     
     while let Some(arg) = i.next() {
 	match arg.as_str() {
 	    "-o" | "--output" => match i.next() {
 		Some(path) => outpath = Some(path),
+		None => return Err(format!("{} flag requires a parameter!",arg)),
+	    },
+	    "-i" | "--input" => match i.next() {
+		Some(path) => inpath = Some(path),
 		None => return Err(format!("{} flag requires a parameter!",arg)),
 	    },
 	    "-t" | "--translate" => match i.next() {
@@ -62,6 +67,10 @@ fn real_main() -> Result<(),String> {
     let mut output = match outpath {
 	None => Box::new(stdout()) as Box<dyn Write>,
 	Some(x) => Box::new(File::create(x).unwrap()) as Box<dyn Write>,
+    };
+    let mut input = match inpath {
+	None => Box::new(stdin()) as Box<dyn Read>,
+	Some(x) => Box::new(File::open(x).unwrap()) as Box<dyn Read>,
     };
     Ok(())
 }
