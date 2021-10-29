@@ -1,9 +1,10 @@
 extern crate stl_io;
 extern crate glam;
 
-use std::io::{Write,Read,stdout,stdin};
+use std::io::{Write,Read,Seek,stdout,stdin,Cursor};
 use std::fs::File;
 use glam::{Affine3A,Vec3};
+use stl_io::{Vertex,Triangle};
 
 #[derive(Debug,Clone)]
 struct ArgParseError;
@@ -22,7 +23,6 @@ fn parse_vec3(argument : &str) -> Result<Vec3,ArgParseError> {
     }
     Ok(Vec3::new(coords[0],coords[1],coords[2]))
 }
-
 
 fn real_main() -> Result<(),String> {
 
@@ -68,10 +68,63 @@ fn real_main() -> Result<(),String> {
 	None => Box::new(stdout()) as Box<dyn Write>,
 	Some(x) => Box::new(File::create(x).unwrap()) as Box<dyn Write>,
     };
-    let mut input = match inpath {
-	None => Box::new(stdin()) as Box<dyn Read>,
-	Some(x) => Box::new(File::open(x).unwrap()) as Box<dyn Read>,
+
+    trait ReadSeek : Read + Seek {};
+    impl<T> ReadSeek for T where T: Read + Seek {};
+    
+    let mut input = match inpath.clone() {
+	Some(x) => Box::new(File::open(x).unwrap()) as Box<dyn ReadSeek>,
+	None => {
+	    let mut tmpfile = Cursor::new(Vec::new());
+	    std::io::copy(&mut stdin(),&mut tmpfile);
+	    tmpfile.seek(std::io::SeekFrom::Start(0));
+	    Box::new(tmpfile) as Box<dyn ReadSeek>
+	},
     };
+
+    // Compile transforms
+    let mut final_t = Affine3A::IDENTITY;
+    for transform in transforms.iter() {
+	final_t = *transform * final_t;
+    }
+
+    fn v_to_v3(v : stl_io::Vector<f32>) -> Vec3 {
+	Vec3::new(v[0],v[1],v[2])
+    }
+
+    fn v3_to_v(v : Vec3) -> stl_io::Vector<f32> {
+	stl_io::Vector::new(v.to_array())
+    }
+    
+    match stl_io::create_stl_reader(&mut input) {
+	Ok(mut mesh) => {
+	    let mut out_tris = Vec::new();
+	    for tri in mesh {
+		let tri = tri.unwrap();
+		let n = v3_to_v(final_t.transform_vector3(v_to_v3(tri.normal)));
+		let v0 = v3_to_v(final_t.transform_point3(v_to_v3(tri.vertices[0])));
+		let v1 = v3_to_v(final_t.transform_point3(v_to_v3(tri.vertices[1])));
+		let v2 = v3_to_v(final_t.transform_point3(v_to_v3(tri.vertices[2])));
+		out_tris.push(Triangle { normal : n, vertices : [v0, v1, v2] });
+	    }
+	    stl_io::write_stl(&mut output, out_tris.iter()).unwrap();
+	},
+	_ => return Err(format!("Could not read STL file '{:?}'.",inpath)),
+    }
+
+    /* We can't easily write indexed meshes via stl_io at the moment *eyeroll* 
+    match stl_io::read_stl(&mut input) {
+	Ok(mut mesh) => {
+	    for mut v in mesh.vertices.iter_mut() {
+		let vec_out = final_t.transform_point3(Vec3::new(v[0],v[1],v[2]));
+		*v = Vertex::new(vec_out.to_array()); 
+		println!("VTX {} {} {}",v[0],v[1],v[2]);
+	    }
+	    stl_io::write_stl(&mut output, mesh.iter()).unwrap();
+	},
+	_ => return Err(format!("Could not read STL file '{:?}'.",inpath)),
+    }
+*/
     Ok(())
 }
 
@@ -81,23 +134,3 @@ fn main() {
 	Err(msg) => println!("Error: {}",msg),
     }
 }
-
-/*
-    let mut transformations : Vec<(usize,Affine3A)> = Vec::new();
-    fn make_translation(arg : &str) -> Result<Affine3A,ArgParseError> {
-	let args : Vec<&str> = arg.split(",").collect();
-	if args.len() != 3 {
-	    return Err(ArgParseError);
-	}
-	let mut coords : [f32; 3] = [0.0; 3];
-	for (i,v) in args.iter().enumerate() {
-	    coords[i] = match v.parse::<f32>() {
-		Ok(val) => val,
-		Err(_) => return Err(ArgParseError),
-	    }
-	}
-	println!("Parsed: {} {} {} ",coords[0],coords[1],coords[2]);
-	let v = Vec3::new(coords[0],coords[1],coords[2]);
-    }
-    collect_transforms(&matches, "translate", make_translation );
-*/		    
