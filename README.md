@@ -19,12 +19,18 @@ FLAGS:
 OPTIONS:
     -i, --input <INPUT>   Path to input STL file; defaults to stdin
     -o, --output <OUTPUT> Path to output STL file; defaults to stdout
+        --radians         All subsequent angles are specified in radians
+        --degrees         All subsequent angles are specified in degrees
 
 TRANSFORMATIONS:
-    Tranformations are applied in the order specified, left to right.
-    --rx <theta>      Rotate model around the X axis by theta radians
-    --ry <theta>      Rotate model around the Y axis by theta radians
-    --rz <theta>      Rotate model around the Z axis by theta radians
+    Tranformations are applied in the order specified, left to right. By
+    default, all angles are specified in degrees. If the --radians flag
+    appears, all angles after the flag will be interpreted as radians until
+    the --degrees flag appears.
+	
+    --rx <theta>      Rotate model around the X axis by angle theta
+    --ry <theta>      Rotate model around the Y axis by angle theta
+    --rz <theta>      Rotate model around the Z axis by angle theta
     -t, --translate <X,Y,Z>   Translate model by specified amount
     -mx               Mirror model through the YZ plane
     -my               Mirror model through the XZ plane

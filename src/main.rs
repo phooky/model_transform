@@ -9,6 +9,20 @@ use stl_io::{Vertex,Triangle};
 #[derive(Debug,Clone)]
 struct ArgParseError;
 
+enum AngleInterpretation {
+    Degrees,
+    Radians,
+}
+
+impl AngleInterpretation {
+    fn convert(&self, raw : f32) -> f32 {
+	match self {
+	    AngleInterpretation::Degrees => raw * 180.0/std::f32::consts::PI,
+	    AngleInterpretation::Radians => raw,
+	}
+    }
+}
+
 fn parse_vec3(argument : &str) -> Result<Vec3,ArgParseError> {
     let args : Vec<&str> = argument.split(",").collect();
     if args.len() != 3 {
@@ -37,9 +51,15 @@ FLAGS:
 OPTIONS:
     -i, --input <INPUT>   Path to input STL file; defaults to stdin
     -o, --output <OUTPUT> Path to output STL file; defaults to stdout
+        --radians         All subsequent angles are specified in radians
+        --degrees         All subsequent angles are specified in degrees
 
 TRANSFORMATIONS:
-    Tranformations are applied in the order specified, left to right.
+    Tranformations are applied in the order specified, left to right. By
+    default, all angles are specified in degrees. If the --radians flag
+    appears, all angles after the flag will be interpreted as radians until
+    the --degrees flag appears.
+
     --rx <theta>      Rotate model around the X axis by theta radians
     --ry <theta>      Rotate model around the Y axis by theta radians
     --rz <theta>      Rotate model around the Z axis by theta radians
@@ -55,6 +75,8 @@ fn real_main() -> Result<(),String> {
     let mut i = std::env::args().skip(1);
     let mut outpath : Option<String> = None;
     let mut inpath : Option<String> = None;
+
+    let mut ang_interp = AngleInterpretation::Degrees;
     
     while let Some(arg) = i.next() {
 	match arg.as_str() {
@@ -62,6 +84,8 @@ fn real_main() -> Result<(),String> {
 		usage();
 		return Ok(());
 	    },
+	    "--radians" => ang_interp = AngleInterpretation::Radians,
+	    "--degrees" => ang_interp = AngleInterpretation::Degrees,
 	    "-o" | "--output" => match i.next() {
 		Some(path) => outpath = Some(path),
 		None => return Err(format!("{} flag requires a parameter!",arg)),
@@ -78,12 +102,15 @@ fn real_main() -> Result<(),String> {
 		None => return Err(format!("{} requires an argument.",arg)), },
 	    "--rx" | "--ry" | "--rz" => match i.next() {
 		Some(spec) => match spec.parse::<f32>() {
-		    Ok(val) => transforms.push( match arg.as_str() {
-			"--rx" => Affine3A::from_rotation_x(val),
-			"--ry" => Affine3A::from_rotation_y(val),
-			"--rz" => Affine3A::from_rotation_z(val),
-			_ => panic!("Unreachable code."),
-		    } ),
+		    Ok(val) => {
+			let cv = ang_interp.convert(val);
+			transforms.push( match arg.as_str() {
+			    "--rx" => Affine3A::from_rotation_x(cv),
+			    "--ry" => Affine3A::from_rotation_y(cv),
+			    "--rz" => Affine3A::from_rotation_z(cv),
+			    _ => panic!("Unreachable code."),
+			} )
+		    },
 		    Err(_) => return Err(format!("Could not parse {} as a float.",spec)),
 		},
 		None => return Err(format!("{} requires an argument.",arg)), },
